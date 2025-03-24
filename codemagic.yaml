@@ -1,0 +1,19 @@
+workflows:
+  android:
+    name: Build Android APK
+    max_build_duration: 60
+    platform: android
+    flutter:
+      channel: stable
+    triggers:
+      - git:
+          branch: main
+    environment:
+      vars:
+        ANDROID_KEYSTORE_PATH: "keystore.jks"
+        ANDROID_KEYSTORE_PASSWORD: "your_keystore_password"
+        ANDROID_KEY_ALIAS: "your_key_alias"
+        ANDROID_KEY_PASSWORD: "your_key_password"
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+      
