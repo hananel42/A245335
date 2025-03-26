@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <title>יצירת קובץ צפצופים</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; direction: rtl; }
+        progress { width: 80%; height: 30px; }
+        input { width: 100px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>יצירת קובץ מוזיקה עם צפצופים</h1>
+    <label>מרווח התחלתי (שניות): <input type="number" id="startInterval" value="1" step="0.1"></label><br>
+    <label>מרווח סופי (שניות): <input type="number" id="endInterval" value="0.2" step="0.1"></label><br>
+    <label>משך זמן (דקות): <input type="number" id="duration" value="30" step="1"></label><br><br>
+
+    <button id="generateButton">צור קובץ</button>
+    <progress id="progressBar" value="0" max="100"></progress>
+    <p id="status">לחץ על הכפתור ליצירת הקובץ</p>
+    <audio id="audioPreview" controls style="display:none"></audio>
+    <a id="downloadLink" style="display:none" download="beeping_sound.wav">📥 הורד קובץ</a>
+
+    <script>
+        document.getElementById("generateButton").addEventListener("click", generateAudio);
+
+        async function generateAudio() {
+            const sampleRate = 44100;
+            const duration = parseFloat(document.getElementById("duration").value) * 60;
+            const initialInterval = parseFloat(document.getElementById("startInterval").value);
+            const finalInterval = parseFloat(document.getElementById("endInterval").value);
+            const toneDuration = 0.1;
+            const numBeeps = Math.floor(duration / ((initialInterval+finalInterval)/2));
+            const intervals = new Float32Array(numBeeps);
+            const audioContext = new AudioContext();
+            const buffer = audioContext.createBuffer(1, sampleRate * duration, sampleRate);
+            const channelData = buffer.getChannelData(0);
+            const progressBar = document.getElementById("progressBar");
+            const statusText = document.getElementById("status");
+
+            // יצירת זמני הצפצופים
+            for (let i = 0; i < numBeeps; i++) {
+                intervals[i] = initialInterval + (finalInterval - initialInterval) * (i / numBeeps);
+            }
+
+            let currentSample = 0;
+            for (let i = 0; i < numBeeps; i++) {
+                if (currentSample >= buffer.length) break;
+
+                const toneSamples = Math.floor(toneDuration * sampleRate);
+                for (let j = 0; j < toneSamples; j++) {
+                    if (currentSample + j < buffer.length) {
+                        channelData[currentSample + j] = Math.sin(2 * Math.PI * 1000 * j / sampleRate) * 0.5;
+                    }
+                }
+
+                currentSample += Math.floor(intervals[i] * sampleRate);
+                progressBar.value = (i / numBeeps) * 100;
+
+                if (i % 10 === 0) await new Promise(r => setTimeout(r, 10)); // מניעת תקיעת הדפדפן
+            }
+
+            // הפעלת תצוגה מקדימה
+            const audioPreview = document.getElementById("audioPreview");
+            const audioBuffer = await bufferToWAV(buffer);
+            const blob = new Blob([audioBuffer], { type: "audio/wav" });
+            const url = URL.createObjectURL(blob);
+
+            audioPreview.src = url;
+            audioPreview.style.display = "block";
+            audioPreview.play();
+
+            // אפשרות להורדה
+            const downloadLink = document.getElementById("downloadLink");
+            downloadLink.href = url;
+            downloadLink.style.display = "block";
+            statusText.textContent = "הקובץ מוכן!";
+        }
+
+        function bufferToWAV(audioBuffer) {
+            return new Promise(resolve => {
+                const numSamples = audioBuffer.length;
+                const buffer = new ArrayBuffer(44 + numSamples * 2);
+                const view = new DataView(buffer);
+
+                function writeString(view, offset, string) {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                }
+
+                writeString(view, 0, "RIFF");
+                view.setUint32(4, 36 + numSamples * 2, true);
+                writeString(view, 8, "WAVE");
+                writeString(view, 12, "fmt ");
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, 1, true);
+                view.setUint32(24, audioBuffer.sampleRate, true);
+                view.setUint32(28, audioBuffer.sampleRate * 2, true);
+                view.setUint16(32, 2, true);
+                view.setUint16(34, 16, true);
+                writeString(view, 36, "data");
+                view.setUint32(40, numSamples * 2, true);
+
+                let offset = 44;
+                for (let i = 0; i < numSamples; i++, offset += 2) {
+                    let s = Math.max(-1, Math.min(1, audioBuffer.getChannelData(0)[i]));
+                    view.setInt16(offset, s * 0x7FFF, true);
+                }
+
+                resolve(buffer);
+            });
+        }
+    </script>
+  <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/p/service-worker.js")
+      .then(() => console.log("Service Worker Registered"))
+      .catch((error) => console.log("Service Worker Registration Failed:", error));
+  }
+  </script>
+  
+</body>
+</html>
+
